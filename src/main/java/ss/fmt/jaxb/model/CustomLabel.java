@@ -32,6 +32,12 @@ public class CustomLabel {
     private String fullName;
     /** Description. */
     private String shortDescription;
+    /** Value. */
+    private String value;
+    /** Language. */
+    private String language;
+    /** Categories. */
+    private String categories;
     /**
      * @return the fullName
      */
@@ -55,5 +61,41 @@ public class CustomLabel {
      */
     public void setShortDescription(String shortDescription) {
         this.shortDescription = shortDescription;
+    }
+    /**
+     * @return the value
+     */
+    public String getValue() {
+        return value;
+    }
+    /**
+     * @param value the value to set
+     */
+    public void setValue(String value) {
+        this.value = value;
+    }
+    /**
+     * @return the language
+     */
+    public String getLanguage() {
+        return language;
+    }
+    /**
+     * @param language the language to set
+     */
+    public void setLanguage(String language) {
+        this.language = language;
+    }
+    /**
+     * @return the categories
+     */
+    public String getCategories() {
+        return categories;
+    }
+    /**
+     * @param categories the categories to set
+     */
+    public void setCategories(String categories) {
+        this.categories = categories;
     }
 }
