@@ -31,8 +31,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import javax.xml.bind.JAXBContext;
-import javax.xml.bind.Unmarshaller;
 import org.apache.log4j.Logger;
 import org.apache.poi.ss.usermodel.Cell;
 import org.apache.poi.ss.usermodel.CellStyle;
@@ -41,10 +39,12 @@ import org.apache.poi.ss.usermodel.Sheet;
 import org.apache.poi.ss.usermodel.Workbook;
 import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 import org.springframework.stereotype.Component;
+import ss.fmt.constants.ProjectFile;
 import ss.fmt.constants.ProjectFolder;
 import ss.fmt.jaxb.model.CustomLabel;
 import ss.fmt.jaxb.model.CustomLabels;
 import ss.fmt.jaxb.model.Translations;
+import ss.fmt.util.CustomLabelsUtil;
 import ss.lana.api.CommandArgument;
 import ss.lana.api.CommandExecutor;
 
@@ -53,7 +53,8 @@ import ss.lana.api.CommandExecutor;
  * @author ss
  */
 @Component
-class CustomLabelsExport implements CommandExecutor {
+class CustomLabelsExport extends CustomLabelsUtil
+        implements CommandExecutor {
     /** Logger. */
     private static final Logger LOG = Logger
             .getLogger(CustomLabelsExport.class);
@@ -67,18 +68,13 @@ class CustomLabelsExport implements CommandExecutor {
     /** Filter by prefix. */
     private static final String ARG_PREFIX = "prefix";
 // ============================================================================
-    /** Custom labels file name. */
-    private static final String C_CUSTOM_LABELS_FILE = "CustomLabels.labels";
-    /** Translation file formatter. */
-    private static final String C_TRANSLATION_FILE_FMT = "%s.translation";
-// ============================================================================
     @Override
     public String name() {
         return "custom-labels-export";
     }
     @Override
     public String description() {
-        return "export custom labels to external format";
+        return "export custom labels to external format (xlsx)";
     }
     @Override
     public void execute(List<CommandArgument> args) throws Exception {
@@ -100,18 +96,18 @@ class CustomLabelsExport implements CommandExecutor {
         }
         File customLabelsFile = new File(projectPath + File.separator
                 + ProjectFolder.CUSTOM_LABELS + File.separator
-                + C_CUSTOM_LABELS_FILE);
+                + ProjectFile.CUSTOM_LABELS);
         if (customLabelsFile.exists()) {
             LOG.info(customLabelsFile.getAbsoluteFile() + " found");
         } else {
-            LOG.fatal(C_CUSTOM_LABELS_FILE + " not exist! Path ["
+            LOG.fatal(ProjectFile.CUSTOM_LABELS + " not exist! Path ["
                     + customLabelsFile.getAbsolutePath() + "]");
         }
         Map<String, Map<String, String>> translationFiles = new HashMap<>();
         for (String lang : languages.split(",")) {
             File f = new File(projectPath + File.separator
                     + ProjectFolder.TRANSLATIONS + File.separator
-                    + String.format(C_TRANSLATION_FILE_FMT, lang.trim()));
+                    + String.format(ProjectFile.TMPL_TRANSLATION, lang.trim()));
             if (f.exists()) {
                 LOG.info("translations for '" + lang.trim() + "' found. Path ["
                         + f.getAbsolutePath() + "]");
@@ -153,34 +149,6 @@ class CustomLabelsExport implements CommandExecutor {
         return args;
     }
 // ====================== PRIVATE =============================================
-    /**
-     * Extract custom labels.
-     * @param file custom labels file.
-     * @return unmarshalled object.
-     * @throws Exception error.
-     */
-    private CustomLabels extractCustomLabels(final File file) throws Exception {
-        JAXBContext jc = JAXBContext.newInstance(CustomLabels.class);
-        Unmarshaller unmarshaller = jc.createUnmarshaller();
-        CustomLabels object = (CustomLabels) unmarshaller.unmarshal(file);
-        LOG.info("total custom labels found [" + object.getLabels().size()
-                + "]");
-        return object;
-    }
-    /**
-     * Extract translations.
-     * @param file translations file.
-     * @return unmarshalled object.
-     * @throws Exception error.
-     */
-    private Translations extractTranslations(final File file) throws Exception {
-        JAXBContext jc = JAXBContext.newInstance(Translations.class);
-        Unmarshaller unmarshaller = jc.createUnmarshaller();
-        Translations object = (Translations) unmarshaller.unmarshal(file);
-        LOG.info("total translations found [" + object.getCustomLabels().size()
-                + "]");
-        return object;
-    }
     /**
      * Create table data.
      * @param translationFiles translation files data.
@@ -231,47 +199,6 @@ class CustomLabelsExport implements CommandExecutor {
         return table;
     }
     /**
-     * Print table.
-     * @param table table with data.
-     */
-    private void printTable(final List<List<String>> table) {
-        if (table.isEmpty()) {
-            LOG.warn("translation table is empty");
-            return;
-        }
-        int colWidth = 30;
-        StringBuilder sb = new StringBuilder();
-        StringBuilder sbFmt = new StringBuilder("|");
-        int columns = table.get(0).size();
-        String[] cells = new String[columns];
-        for (int i = 0; i < columns; i++) {
-            sbFmt.append(" %-").append(colWidth).append("s |");
-            cells[i] = new String(new char[colWidth]).replace('\0', '-');
-        }
-        sbFmt.append("\n");
-        String format = sbFmt.toString();
-        String hline = String.format(format.replace("|", "+"), cells);
-        int counter = 0;
-        for (List<String> row : table) {
-            if (counter == 1 || counter == 0) {
-                sb.append(hline);
-            }
-            String[] data = new String[row.size()];
-            for (int i = 0; i < row.size(); i++) {
-                String s = row.get(i);
-                if (s.length() > colWidth - 3) {
-                    data[i] = s.substring(0, colWidth - 3) + "...";
-                } else {
-                    data[i] = s;
-                }
-            }
-            sb.append(String.format(format, data));
-            counter++;
-        }
-        sb.append(hline);
-        LOG.info("\n Print table \n" + sb.toString());
-    }
-    /**
      * Export data to XLSX file.
      * @param table data table.
      * @throws Exception error.
@@ -293,9 +220,11 @@ class CustomLabelsExport implements CommandExecutor {
             row.setRowStyle(style);
             counter++;
         }
-        try (FileOutputStream fileOut = new FileOutputStream(
-                "custom-labels-export.xlsx")) {
+        File file = new File("custom-labels-export.xlsx");
+        try (FileOutputStream fileOut = new FileOutputStream(file)) {
             wb.write(fileOut);
+            LOG.info("translations saved in file [" + file.getAbsolutePath()
+                    + "]");
         }
     }
 }
