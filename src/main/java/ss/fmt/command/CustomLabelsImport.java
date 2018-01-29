@@ -44,6 +44,7 @@ import org.springframework.stereotype.Component;
 import ss.fmt.constants.ProjectFile;
 import ss.fmt.constants.ProjectFolder;
 import ss.fmt.jaxb.model.CustomLabels;
+import ss.fmt.jaxb.model.Translations;
 import ss.fmt.util.CustomLabelsUtil;
 import ss.lana.api.CommandArgument;
 import ss.lana.api.CommandExecutor;
@@ -216,6 +217,7 @@ class CustomLabelsImport extends CustomLabelsUtil implements CommandExecutor {
                     + customLabelsFile.getAbsolutePath() + "]");
             return;
         }
+        Set<String> excludeLang = new HashSet<>();
         LOG.info("-----------------------------------------------------------");
         LOG.info("            " + ProjectFile.CUSTOM_LABELS + " changes");
         LOG.info("-----------------------------------------------------------");
@@ -224,6 +226,7 @@ class CustomLabelsImport extends CustomLabelsUtil implements CommandExecutor {
             String lang = cl.getLanguage();
             String tkey = cl.getFullName();
             if (!(lang == null || tkey == null || !langMap.containsKey(lang))) {
+                excludeLang.add(lang);
                 Map<String, String> tMap = langMap.get(lang);
                 if (tMap.containsKey(tkey)) {
                     String oldVal = cl.getValue() == null ? "" : cl.getValue();
@@ -244,5 +247,43 @@ class CustomLabelsImport extends CustomLabelsUtil implements CommandExecutor {
         jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
         jaxbMarshaller.marshal(customLabels, customLabelsFile);
         LOG.info(ProjectFile.CUSTOM_LABELS + " saved...");
+        // override translations
+        for (String lang : langMap.keySet()) {
+            if (excludeLang.contains(lang)) {
+                LOG.info("language [" + lang + "] was saved to "
+                        + ProjectFile.CUSTOM_LABELS + " file, skip it...");
+                continue;
+            }
+            String fname = String
+                    .format(ProjectFile.TMPL_TRANSLATION, lang.trim());
+            File translationFile = new File(projectFolder,
+                    ProjectFolder.TRANSLATIONS + File.separator + fname);
+            if (!translationFile.exists()) {
+                LOG.warn("translation file ["
+                        + translationFile.getAbsolutePath() + "] isn't exists");
+                continue;
+            }
+            LOG.info("-----------------------------------------------------------");
+            LOG.info("            " + fname + " changes");
+            LOG.info("-----------------------------------------------------------");
+            Translations t = extractTranslations(translationFile);
+            Map<String, String> tmap = langMap.get(lang);
+            t.getCustomLabels().forEach((tr) -> {
+                String key = tr.getName();
+                String oldVal = tr.getLabel();
+                String newVal = tmap.get(key);
+                if (!oldVal.equals(newVal) && newVal != null) {
+                    tr.setLabel(newVal);
+                    LOG.info("key [" + key + "], old value [" + oldVal
+                            + "], new value [" + newVal + "]");
+                }
+            });
+            jaxbContext = JAXBContext.newInstance(Translations.class);
+            jaxbMarshaller = jaxbContext.createMarshaller();
+            jaxbMarshaller.setProperty(Marshaller.JAXB_FORMATTED_OUTPUT, true);
+            jaxbMarshaller.marshal(t, translationFile);
+            LOG.info(fname + " saved...");
+            LOG.info("-----------------------------------------------------------");
+        }
     }
 }
